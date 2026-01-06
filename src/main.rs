@@ -16,7 +16,7 @@ struct App {
     args: Vec<Id>,
 }
 
-type Pos = Vec<(Id, usize)>; // 
+type Pos = Vec<(Id, usize)>;
 
 #[derive(Debug, Clone, Copy)]
 struct Eq {
@@ -24,7 +24,7 @@ struct Eq {
     rhs: Id,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Rule {
     lhs: Id,
     rhs: Id,
@@ -34,6 +34,54 @@ struct TermBank {
     terms: Vec<App>, // HashMap<Id, Term>
     memo: HashMap<App, Id>,
     // size : Vec<usize>
+}
+
+struct KB {
+    tb: TermBank,
+    rules: Vec<Rule>,
+}
+
+impl KB {
+    // returns true if this union had an effect.
+    fn union(&mut self, eq: Eq) -> bool {
+        if eq.lhs == eq.rhs {
+            return false
+        }
+
+        let r = self.tb.orient(eq);
+        if !self.rules.contains(&r) {
+            self.rules.push(r);
+            true
+        } else { false }
+    }
+
+    fn complete(&mut self) {
+        let mut dirty = false;
+        loop {
+            dirty = false;
+
+            let mut new_ones = Vec::new();
+            for &r1 in &self.rules {
+                for &r2 in &self.rules {
+                    for (lhs, rhs) in [(r2.lhs, r2.rhs), (r2.rhs, r2.lhs)] {
+                        new_ones.extend(
+                            self.tb.all_subst(lhs, &r1)
+                            .into_iter()
+                            .map(|new_lhs| Eq {
+                                lhs: new_lhs,
+                                rhs: rhs,
+                            }));
+                    }
+                }
+            }
+
+            for eq in new_ones {
+                if self.union(eq) { dirty = true; }
+            }
+
+            if !dirty { break }
+        }
+    }
 }
 
 impl TermBank {
@@ -220,13 +268,26 @@ fn main() {
     let c = tb.app("c".into(), vec![]);
 
     let f_a = tb.app("f".to_string(), vec![a]);
-    let f_aa = tb.app("f".to_string(), vec![a, a]);
+    let f_aa = tb.app("f".to_string(), vec![f_a]);
+    let f_aaa = tb.app("f".to_string(), vec![f_aa]);
+    let f_aaaa = tb.app("f".to_string(), vec![f_aaa]);
     let f_b = tb.app("f".to_string(), vec![b]);
     let g_a = tb.app("g".to_string(), vec![a]);
     let g_b = tb.app("g".to_string(), vec![b]);
 
-    let neweqs = tb.deduce(&Rule { lhs: f_aa, rhs: b }, &Rule { lhs: a, rhs: c });
-    for a in neweqs {
-        println!("{}", tb.stringify_eq(a));
+    let mut kb = KB {
+        tb,
+        rules: Vec::new(),
+    };
+
+    kb.union(Eq { lhs: f_aa, rhs: b });
+    kb.union(Eq { lhs: f_aaaa, rhs: c });
+    kb.union(Eq { lhs: a, rhs: c });
+    kb.union(Eq { lhs: b, rhs: c });
+
+    kb.complete();
+
+    for r in &kb.rules {
+        println!("{}", kb.tb.stringify_rule(*r));
     }
 }
