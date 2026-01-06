@@ -18,13 +18,13 @@ struct App {
 
 type Pos = Vec<(Id, usize)>; // 
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 struct Eq {
     lhs: Id,
     rhs: Id,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 struct Rule {
     lhs: Id,
     rhs: Id,
@@ -42,6 +42,31 @@ impl TermBank {
             terms: vec![],
             memo: HashMap::new(),
         }
+    }
+
+    fn stringify(&self, e: Id) -> String {
+        let t = &self.terms[e];
+        let mut s = t.f.clone();
+        if t.args.len() == 0 { return s }
+
+        s.push_str("(");
+        for (i, a) in t.args.iter().enumerate() {
+            s.push_str(&self.stringify(*a));
+            if i != t.args.len() - 1 {
+                s.push_str(", ");
+            }
+        }
+        s.push_str(")");
+
+        s
+    }
+
+    fn stringify_eq(&self, eq: Eq) -> String {
+        format!("{} = {}", self.stringify(eq.lhs), self.stringify(eq.rhs))
+    }
+
+    fn stringify_rule(&self, r: Rule) -> String {
+        format!("{} -> {}", self.stringify(r.lhs), self.stringify(r.rhs))
     }
 
     fn app(&mut self, f: String, args: Vec<Id>) -> Id {
@@ -201,6 +226,7 @@ fn main() {
     let g_b = tb.app("g".to_string(), vec![b]);
 
     let neweqs = tb.deduce(&Rule { lhs: f_aa, rhs: b }, &Rule { lhs: a, rhs: c });
-    dbg!(neweqs);
-    println!("Hello, world!");
+    for a in neweqs {
+        println!("{}", tb.stringify_eq(a));
+    }
 }
